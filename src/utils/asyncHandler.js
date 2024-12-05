@@ -1,5 +1,7 @@
 //Async/Await
 
+import { response } from "express";
+
 const asyncHandler = (requestHandler) => {
   async (req, res, next) => {
     try {
@@ -22,4 +24,6 @@ const asyncHandler = (requestHandler) => {
 //     }
 // }
 
-export {asyncHandler}
+export { asyncHandler };
+
+
