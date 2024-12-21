@@ -3,7 +3,7 @@ import { ApiError } from "../utils/ApiError.js";
 import { User } from "../models/user.model.js";
 import { uploadOnCloudinary } from "../utils/Cloudinary.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
-
+import fs from "fs";
 const registerUser = asyncHandler(async (req, res) => {
   //  Get User Details
   //  Validate input Data - Not EMPTY
@@ -35,11 +35,18 @@ const registerUser = asyncHandler(async (req, res) => {
   }
 
   //  3. Check if User Already Exists By:- (Username & Email)
-  const existedUser = User.findOne({
+  const existedUser = await User.findOne({
     $or: [{ email }, { username }],
   });
-
+  
+  // ***BUG FIX*** Existing user if exist files were still on my localStorage(should have been Deleted)
   if (existedUser) {
+    if (req.files?.avatar[0]?.path) {
+      fs.unlinkSync(req.files.avatar[0].path);
+    }
+    if (req.files?.coverImage[0]?.path) {
+      fs.unlinkSync(req.files.coverImage[0].path);
+    }
     throw new ApiError(409, "User with Email or Username Already Exists");
   }
 
@@ -47,14 +54,19 @@ const registerUser = asyncHandler(async (req, res) => {
   // 4. Get Images Path(avatar & coverImage) & Check For Avatar
 
   const avatarLocalPath = req.files?.avatar[0]?.path;
-  const coverImageLocalPath = req.files?.coverImage[0]?.path;
-
-  //  Since Avatar is Required in UserModel Mandate it by if Condition
   if (!avatarLocalPath) {
-    throw new ApiError(400, "Avatar File is Required");
+    throw new ApiError(400, "AvatarLocalPath File is Required");
   }
 
+  let coverImageLocalPath;
+  if (req.files.coverImage) {
+    //Only create Path if it exists
+    coverImageLocalPath = req.files?.coverImage[0]?.path;
+  }
+  //  Since Avatar is Required in UserModel Mandate it by if Condition
+
   //  5. If Available Upload Them To Cloudinary, Avatar
+  // Pass Path and upload
   const avatar = await uploadOnCloudinary(avatarLocalPath); // utils cloudinary file return entire response
   const coverImage = await uploadOnCloudinary(coverImageLocalPath);
 
@@ -76,19 +88,19 @@ const registerUser = asyncHandler(async (req, res) => {
     //Rest All the fields are covered
   });
 
-  //  7. Remove password and refresh token field from response
-  const userCreated = User.findById(user._id).select(
+  // **** 7. Remove password and refresh token field from response *****
+  const userCreated = await User.findById(user._id).select(
     "-password -refreshToken" //By Default all are selected
   );
 
   //  8. Check for user creation
   if (!userCreated) {
-    throw new ApiError(500,"Something went wrong while registering User")
+    throw new ApiError(500, "Something went wrong while registering User");
   }
 
   //  9. return res (ApiResponse.js)
-  return res.status(201).json(
-    new ApiResponse(200,userCreated,"User Registered Successfully")
-  )
+  return res
+    .status(201)
+    .json(new ApiResponse(200, userCreated, "User Registered Successfully"));
 });
 export { registerUser };
