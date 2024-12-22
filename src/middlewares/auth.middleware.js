@@ -1,7 +1,7 @@
 import jwt from "jsonwebtoken";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
-import { User } from "../models/user.model";
+import { User } from "../models/user.model.js";
 
 //  ****in async(req,res,next) ==>>> as res was nowhere used so put _ there***
 

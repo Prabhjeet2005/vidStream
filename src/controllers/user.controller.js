@@ -145,7 +145,7 @@ const loginUser = asyncHandler(async (req, res) => {
   }
 
   const user = await User.findOne({
-    $or: [{ email }, { password }],
+    $or: [{ email }, { username }],
   });
 
   if (!user) {
