@@ -135,7 +135,6 @@ const loginUser = asyncHandler(async (req, res) => {
 
   //  1. req.body -> data
   const { username, email, password } = req.body;
-
   //  2. username/email
   if (!username && !email) {
     throw new ApiError(400, "Username or email is Required");
@@ -159,7 +158,7 @@ const loginUser = asyncHandler(async (req, res) => {
   const isPasswordValid = await user.isPasswordCorrect(password);
 
   if (!isPasswordValid) {
-    throw new ApiError(401, "Invalid Credentials");
+    throw new ApiError(401, "Invalid user Credentials");
   }
 
   //  4. Access & Refresh Token (Create a method above)
@@ -197,7 +196,7 @@ const loginUser = asyncHandler(async (req, res) => {
 
 //  Before Logout Create auth.middleware.js
 const logoutUser = asyncHandler(async (req, res) => {
-  await User.findOneAndUpdate(
+  await User.findByIdAndDelete(
     req.user._id,
     {
       $set: {
