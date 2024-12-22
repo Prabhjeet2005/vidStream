@@ -196,7 +196,7 @@ const loginUser = asyncHandler(async (req, res) => {
 
 //  Before Logout Create auth.middleware.js
 const logoutUser = asyncHandler(async (req, res) => {
-  await User.findByIdAndDelete(
+  await User.findByIdAndUpdate(
     req.user._id,
     {
       $set: {
