@@ -4,6 +4,26 @@ import { User } from "../models/user.model.js";
 import { uploadOnCloudinary } from "../utils/Cloudinary.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import fs from "fs";
+
+const generateAccessAndRefreshToken = async (userid) => {
+  try {
+    const user = await User.findById(userid);
+    const accessToken = user.generateAccessToken();
+    const refreshToken = user.generateRefreshToken();
+
+    // { validateBeforeSave: false } Else it will again check for password
+    //  and here only we are manipulating by userid and password not here so it will give error
+    user.refreshToken = refreshToken;
+    await user.save({ validateBeforeSave: false });
+    return { accessToken, refreshToken };
+  } catch (error) {
+    throw new ApiError(
+      500,
+      "Something went wrong while generating Access And Refresh token"
+    );
+  }
+};
+
 const registerUser = asyncHandler(async (req, res) => {
   //  Get User Details
   //  Validate input Data - Not EMPTY
@@ -38,7 +58,7 @@ const registerUser = asyncHandler(async (req, res) => {
   const existedUser = await User.findOne({
     $or: [{ email }, { username }],
   });
-  
+
   // ***BUG FIX*** Existing user if exist files were still on my localStorage(should have been Deleted)
   if (existedUser) {
     if (req.files?.avatar[0]?.path) {
@@ -67,7 +87,8 @@ const registerUser = asyncHandler(async (req, res) => {
 
   //  5. If Available Upload Them To Cloudinary, Avatar
   // Pass Path and upload
-  const avatar = await uploadOnCloudinary(avatarLocalPath); // utils cloudinary file return entire response
+  const avatar = await uploadOnCloudinary(avatarLocalPath);
+  // utils cloudinary file return entire response
   const coverImage = await uploadOnCloudinary(coverImageLocalPath);
 
   if (!avatar) {
@@ -77,7 +98,8 @@ const registerUser = asyncHandler(async (req, res) => {
   //  6. Create user Object - Create Entry in Db
 
   const user = await User.create({
-    //Here Error is Not defined as it is a subpart of asyncHandler function and it will automatically generate the error if it occurs
+    //Here Error is Not defined as it is a subpart of asyncHandler function
+    //and it will automatically generate the error if it occurs
     fullName,
     avatar: avatar.url,
     coverImage: coverImage?.url || "", // Since it is Not required by UserModel
@@ -103,4 +125,100 @@ const registerUser = asyncHandler(async (req, res) => {
     .status(201)
     .json(new ApiResponse(200, userCreated, "User Registered Successfully"));
 });
-export { registerUser };
+
+const loginUser = asyncHandler(async (req, res) => {
+  //  req.body -> data
+  //  username/email
+  //  check Password
+  //  Access & Refresh Token
+  //  send cookie
+
+  //  1. req.body -> data
+  const { username, email, password } = req.body;
+
+  //  2. username/email
+  if (!username && !email) {
+    throw new ApiError(400, "Username or email is Required");
+  }
+  if (!password || password.trim() === "") {
+    throw new ApiError(400, "Password is Required");
+  }
+
+  const user = await User.findOne({
+    $or: [{ email }, { password }],
+  });
+
+  if (!user) {
+    throw new ApiError(404, "User Doesn't Exist");
+  }
+
+  //  3. check Password
+  //  Our Methods from user model are in "user" Not "User"
+  //  "User" ==> Monggose Methods
+  //  "user" ==> Our Defined Methods form user.smodel.j
+  const isPasswordValid = await user.isPasswordCorrect(password);
+
+  if (!isPasswordValid) {
+    throw new ApiError(401, "Invalid Credentials");
+  }
+
+  //  4. Access & Refresh Token (Create a method above)
+  const { accessToken, refreshToken } = await generateAccessAndRefreshToken(
+    user._id
+  );
+
+  const loggedInUser = await User.findById(user._id).select(
+    "-password -refreshToken"
+  );
+
+  //  5. Send Cookie
+  const options = {
+    httpOnly: true, //  Only Server Modifiable
+    secure: true,
+  };
+  //  Sending Cookie
+  return res
+    .status(200)
+    .cookie("accessToken", accessToken, options)
+    .cookie("refreshToken", refreshToken, options)
+    .json(
+      // ApiResponse(statusCode,data,message)
+      new ApiResponse(
+        200,
+        {
+          user: loggedInUser,
+          accessToken,
+          refreshToken,
+        },
+        "User Logged In SuccessFully"
+      )
+    );
+});
+
+//  Before Logout Create auth.middleware.js
+const logoutUser = asyncHandler(async (req, res) => {
+  await User.findOneAndUpdate(
+    req.user._id,
+    {
+      $set: {
+        refreshToken: undefined,
+      },
+    },
+    {
+      //Makes a new return response having new updated value otherwise return Old Value
+      new: true,
+    }
+  );
+
+  const options = {
+    httpOnly: true, //  Only Server Modifiable
+    secure: true,
+  };
+
+  return res
+    .status(200)
+    .clearCookie("accessToken", options)
+    .clearCookie("refreshToken", options)
+    .json(new ApiResponse(200, {}, "User Logout Successfully"));
+});
+export { registerUser, loginUser, logoutUser };
