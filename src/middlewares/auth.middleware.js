@@ -10,8 +10,9 @@ export const verifyJWT = asyncHandler(async (req, _, next) => {
     const token =
       req.cookies?.accessToken ||
       req.header("Authorization")?.replace("Bearer ", "");
+
     if (!token) {
-      throw new ApiError(401, "Unauthorized Request (auth Middleware)");
+      throw new ApiError(401, "User Already LoggedOut");
     }
     //  decodedToken from user.model.js
     const decodedToken = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
